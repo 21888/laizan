@@ -51,7 +51,7 @@ export function getFeedAcSettings(): FeedAcSettingsV2 {
   }
 
   if (version === 'v2') {
-    return saved as FeedAcSettingsV2
+    return getUnifiedFeedAcSettings(saved)
   }
 
   // 未知版本，返回默认配置
@@ -304,6 +304,7 @@ export function updateExceptRuleGroup(
 export function importFullSettings(config: FeedAcSettingsV2): FeedAcSettingsV2 {
   const normalized: FeedAcSettingsV2 = {
     ...config,
+    muteBrowser: config.muteBrowser ?? true,
     version: 'v2' // 确保版本标识
   }
   storage.set(StorageKey.feedAcSetting, normalized)
@@ -319,6 +320,7 @@ export function getDefaultFeedAcSettingsV2(): FeedAcSettingsV2 {
     simulateWatchBeforeComment: false,
     watchTimeRangeSeconds: [5, 15],
     onlyCommentActiveVideo: false,
+    muteBrowser: true,
     maxCount: 10
   }
 }
@@ -359,6 +361,7 @@ export function migrateV1ToV2(v1Config: FeedAcSettings): FeedAcSettingsV2 {
     simulateWatchBeforeComment: v1Config.simulateWatchBeforeComment,
     watchTimeRangeSeconds: [...v1Config.watchTimeRangeSeconds],
     onlyCommentActiveVideo: v1Config.onlyCommentActiveVideo,
+    muteBrowser: true,
     maxCount: 10 // 默认值
   }
 }
@@ -369,7 +372,10 @@ export function getUnifiedFeedAcSettings(config?: FeedAcSettingsUnion): FeedAcSe
 
   switch (version) {
     case 'v2':
-      return config as unknown as FeedAcSettingsV2
+      return {
+        ...(config as FeedAcSettingsV2),
+        muteBrowser: (config as FeedAcSettingsV2).muteBrowser ?? true
+      }
     case 'v1':
       return migrateV1ToV2(config as unknown as FeedAcSettings)
     default:

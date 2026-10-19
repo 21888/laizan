@@ -76,7 +76,16 @@ const handleStart = async (): Promise<void> => {
       return
     }
     const usesJev = (groups: FeedAcRuleGroups[]): boolean =>
-      groups.some((group) => group.type === 'ai' || usesJev(group.children || []))
+      groups.some((group) => {
+        const commentLike = group.commentLike ?? settings.value!.commentLike
+        return (
+          group.type === 'ai' ||
+          (!group.children?.length &&
+            commentLike?.enabled &&
+            Boolean(commentLike.aiPrompt?.trim())) ||
+          usesJev(group.children || [])
+        )
+      })
     if (usesJev(settings.value!.ruleGroups) && !aiSettings.jevApiKey.trim()) {
       message.error('请先在全局设置中配置判断模型 JEV 的 API Key')
       return

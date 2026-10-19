@@ -1,6 +1,18 @@
 export type RuleField = 'nickName' | 'videoDesc' | 'videoTag'
 export type RuleType = 'ai' | 'manual'
 
+export interface CommentLikeSettings {
+  enabled: boolean
+  aiPrompt?: string
+  maxPages?: number
+  maxLikesPerVideo?: number
+  includeKeywords?: string[]
+  excludeKeywords?: string[]
+  minLikes?: number
+  maxLikes?: number
+  includeReplies?: boolean
+}
+
 export interface FeedAcRule {
   field: RuleField
   keyword: string
@@ -17,6 +29,7 @@ export interface FeedAcRuleGroups {
   // 手动配置类型
   relation?: 'and' | 'or'
   rules?: FeedAcRule[]
+  commentLike?: CommentLikeSettings
   // 评论内容（只有最底层规则才有）
   commentTexts?: string[]
   commentImagePath?: string
@@ -48,7 +61,9 @@ export interface FeedAcSettingsV2 {
   simulateWatchBeforeComment: boolean
   watchTimeRangeSeconds: [number, number]
   onlyCommentActiveVideo: boolean
+  muteBrowser: boolean
   maxCount: number
+  commentLike?: CommentLikeSettings
 }
 
 // 联合类型，支持两种版本

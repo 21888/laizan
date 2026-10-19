@@ -46,6 +46,13 @@
               <span>开启此选项将会只评论2天人有人评论的视频</span>
             </n-popover>
           </div>
+          <n-checkbox
+            v-model:checked="settings!.muteBrowser"
+            size="small"
+            @update:checked="saveSettings"
+          >
+            浏览器静音
+          </n-checkbox>
         </div>
       </n-collapse-item>
     </n-collapse>
@@ -61,12 +68,12 @@ import { HelpCircleOutline } from '@vicons/ionicons5'
 const settingsStore = useSettingsStore()
 const { settings } = storeToRefs(settingsStore)
 const { updateExceptRuleGroup } = settingsStore
-
 const saveSettings = (): void => {
   updateExceptRuleGroup({
     simulateWatchBeforeComment: settings.value!.simulateWatchBeforeComment,
     watchTimeRangeSeconds: settings.value!.watchTimeRangeSeconds,
-    onlyCommentActiveVideo: settings.value!.onlyCommentActiveVideo
+    onlyCommentActiveVideo: settings.value!.onlyCommentActiveVideo,
+    muteBrowser: settings.value!.muteBrowser
   })
 }
 </script>

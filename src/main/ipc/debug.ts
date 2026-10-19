@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { chromium } from '@playwright/test'
 import { storage, StorageKey } from '../utils/storage'
+import { getFeedAcSettings } from '../service/feed-ac/settings'
 
 /**
  * 注册调试功能相关的 IPC 处理器
@@ -20,7 +21,8 @@ export function registerDebugIPC(): void {
       // 启动Playwright浏览器
       const browser = await chromium.launch({
         executablePath: browserPath,
-        headless: false
+        headless: false,
+        args: getFeedAcSettings().muteBrowser ? ['--mute-audio'] : []
       })
 
       // 创建新页面并打开抖音首页，使用 storageState 保持登录信息

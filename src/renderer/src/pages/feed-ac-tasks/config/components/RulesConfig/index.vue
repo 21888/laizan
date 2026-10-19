@@ -106,6 +106,16 @@ const columns: DataTableColumns<FeedAcRuleGroups> = [
     }
   },
   {
+    title: '评论点赞',
+    key: 'commentLike',
+    render(row) {
+      if (row.children?.length) return '由子规则组配置'
+      const config = row.commentLike ?? settings.value!.commentLike
+      if (!config?.enabled) return '未开启'
+      return config.aiPrompt?.trim() ? 'JEV 判断 + 条件筛选' : '条件筛选'
+    }
+  },
+  {
     title: '操作',
     key: 'actions',
     render(row) {

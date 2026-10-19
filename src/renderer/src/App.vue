@@ -33,13 +33,13 @@ const themeOverrides: GlobalThemeOverrides = {
     :hljs="hljs"
   >
     <main>
-      <n-modal-provider>
-        <n-dialog-provider>
-          <n-message-provider>
+      <n-message-provider>
+        <n-modal-provider>
+          <n-dialog-provider>
             <RouterView />
-          </n-message-provider>
-        </n-dialog-provider>
-      </n-modal-provider>
+          </n-dialog-provider>
+        </n-modal-provider>
+      </n-message-provider>
     </main>
     <n-global-style />
   </n-config-provider>

@@ -27,7 +27,8 @@ export async function loginAndStorageState(): Promise<void> {
   }
   const browser = await chromium.launch({
     executablePath: execPath,
-    headless: false
+    headless: false,
+    args: getFeedAcSettings().muteBrowser ? ['--mute-audio'] : []
   })
   const context = await browser.newContext()
   const page = await context.newPage()
@@ -78,6 +79,7 @@ export default class ACTask extends EventEmitter {
 
   // 用于缓存视频数据的Map
   private _videoDataCache = new Map<string, FeedItem>()
+  private _commentDataCache = new Map<string, CommentResponse>()
 
   constructor(taskId: string) {
     super()
@@ -91,7 +93,8 @@ export default class ACTask extends EventEmitter {
     }
     const browser = await chromium.launch({
       executablePath: execPath,
-      headless: false
+      headless: false,
+      args: getFeedAcSettings().muteBrowser ? ['--mute-audio'] : []
     })
     const context = await browser.newContext({
       storageState: storage.get(StorageKey.auth) ?? {}
@@ -133,6 +136,13 @@ export default class ACTask extends EventEmitter {
 
       // 记录当前视频开始时间
       this._currentVideoStartTime = Date.now()
+
+      if (await this._dyElementHandler.isCurrentFeedLive()) {
+        this._log('info', '当前为直播推荐，立即跳过')
+        this._recordVideoSkip('live', '直播推荐', {})
+        await this._dyElementHandler.goToNextVideo()
+        continue
+      }
 
       // 获取当前视频信息
       const videoInfo = await this._getCurrentVideoInfo()
@@ -209,7 +219,9 @@ export default class ACTask extends EventEmitter {
         // 打开评论区
         this._log('info', '打开评论区并监听评论接口')
 
-        const activityCheck = await this._openCommentSectionAndMonitor()
+        const activityCheck = await this._openCommentSectionAndMonitor(
+          settings.onlyCommentActiveVideo
+        )
         if (settings.onlyCommentActiveVideo) {
           this._log('info', `视频活跃度判断结果: ${activityCheck.activityInfo}`)
         } else {
@@ -224,6 +236,8 @@ export default class ACTask extends EventEmitter {
         await sleep(random(2000, 4000))
 
         if (activityCheck.shouldComment) {
+          await this._likeComments(settings, videoAnalysis.matchedRuleGroup)
+          if (this._stopped) throw new Error('Task stopped')
           this._log('info', '尝试发布评论')
           const commnetResult = await this._postComment(videoInfo, videoAnalysis.matchedRuleGroup)
           if (commnetResult.success) {
@@ -285,6 +299,46 @@ export default class ACTask extends EventEmitter {
     await this._close()
   }
 
+  private async _likeComments(
+    settings: FeedAcSettingsV2,
+    ruleGroup?: FeedAcRuleGroups
+  ): Promise<void> {
+    const config = ruleGroup?.commentLike ?? settings.commentLike
+    if (!config?.enabled) return
+    const maxPages = Math.max(1, Math.floor(config.maxPages ?? 1))
+    const maxLikes = Math.max(0, Math.floor(config.maxLikesPerVideo ?? 3))
+    const seen = new Set<string>()
+    let liked = 0
+    try {
+      for (let page = 1; page <= maxPages && liked < maxLikes && !this._stopped; page++) {
+        const comments = await this._dyElementHandler.getVisibleComments()
+        this._log('info', `评论点赞：第 ${page}/${maxPages} 页，识别到 ${comments.length} 条评论`)
+        for (const comment of comments) {
+          if (this._stopped || liked >= maxLikes) break
+          if (seen.has(comment.id)) continue
+          seen.add(comment.id)
+          if (!this._dyElementHandler.matchesCommentLikeRule(comment, config)) continue
+          if (config.aiPrompt?.trim()) {
+            const jev = new JevService(getAISettings().jevApiKey)
+            const shouldLike = await jev.shouldLikeComment(JSON.stringify(comment), config.aiPrompt)
+            this._log('info', `JEV 评论判断：${shouldLike ? '点赞' : '跳过'}：${comment.text}`)
+            if (!shouldLike) continue
+          }
+          if (this._stopped) break
+          await this._dyElementHandler.likeComment(comment.id)
+          liked++
+          this._log('success', `评论点赞成功 ${liked}/${maxLikes}：${comment.text}`)
+          await sleep(random(500, 1000))
+        }
+        if (page >= maxPages || liked >= maxLikes || this._stopped) break
+        if (!(await this._dyElementHandler.scrollComments())) break
+      }
+    } catch (error) {
+      this._log('warn', `停止本视频评论点赞：${error}`)
+    }
+    this._log('info', `本视频共点赞 ${liked} 条评论`)
+  }
+
   private async _close(): Promise<void> {
     if (!this._page || !this._browser) return
     // 在关闭页面前更新本地登录缓存，避免下次仍然使用初始缓存
@@ -343,6 +397,15 @@ export default class ACTask extends EventEmitter {
     // 添加响应监听器
     this._page?.on('response', async (response) => {
       const url = response.url()
+      const parsedUrl = new URL(url)
+      if (/\/comment\/list\/?$/.test(parsedUrl.pathname)) {
+        const videoId = parsedUrl.searchParams.get('aweme_id')
+        // 活跃度只检查首批评论，滚动加载的数据不能覆盖首批数据。
+        if (videoId && (parsedUrl.searchParams.get('cursor') || '0') === '0') {
+          const data = (await response.json().catch(() => null)) as CommentResponse | null
+          if (data?.status_code === 0) this._commentDataCache.set(videoId, data)
+        }
+      }
       if (url.includes('https://www.douyin.com/aweme/v1/web/tab/feed/')) {
         this._log('info', '捕获到视频Feed接口请求')
 
@@ -765,12 +828,36 @@ export default class ACTask extends EventEmitter {
   }
 
   // 使用快捷键开启评论区并监听评论接口数据
-  async _openCommentSectionAndMonitor(): Promise<{ shouldComment: boolean; activityInfo: string }> {
+  async _openCommentSectionAndMonitor(
+    checkActivity = true
+  ): Promise<{ shouldComment: boolean; activityInfo: string }> {
     try {
       // 确保当前页面已加载完成
       await this._page?.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {
         this._log('warn', '等待页面加载完成超时，继续执行')
       })
+
+      const alreadyOpen = await this._dyElementHandler.isCommentSectionOpen()
+      if (!checkActivity || alreadyOpen) {
+        if (!alreadyOpen) {
+          await this._page!.locator(
+            '[data-e2e="feed-active-video"] [data-e2e="feed-comment-icon"]'
+          ).click()
+        }
+        await this._page!.locator('#videoSideCard [data-e2e="comment-list"]').waitFor({
+          state: 'visible',
+          timeout: 5000
+        })
+        if (!checkActivity) return { shouldComment: true, activityInfo: '跳过活跃度检查' }
+        const videoId = await this._page!.locator('[data-e2e="feed-active-video"]').getAttribute(
+          'data-e2e-vid'
+        )
+        const cached = videoId ? this._commentDataCache.get(videoId) : undefined
+        if (!cached)
+          return { shouldComment: false, activityInfo: '评论区已打开，但缺少首批评论活跃度数据' }
+        const result = this._checkVideoActivity(cached)
+        return { shouldComment: result.isActive, activityInfo: result.reason }
+      }
 
       this._log('info', '设置评论接口监听...')
 
@@ -782,7 +869,7 @@ export default class ACTask extends EventEmitter {
         // 创建临时响应监听器
         const responseListener = async (response): Promise<void> => {
           const url = response.url()
-          if (url.includes('https://www.douyin.com/aweme/v1/web/comment/list/')) {
+          if (/\/comment\/list\/?$/.test(new URL(url).pathname)) {
             this._log('info', '捕获到评论列表接口请求')
 
             try {
@@ -840,9 +927,10 @@ export default class ACTask extends EventEmitter {
         }, 10000)
       })
 
-      // 使用键盘快捷键 "X" 开启评论区
-      this._log('info', '使用快捷键X打开评论区')
-      await this._page?.keyboard.press('x')
+      this._log('info', '点击评论按钮打开评论区')
+      await this._page!.locator(
+        '[data-e2e="feed-active-video"] [data-e2e="feed-comment-icon"]'
+      ).click()
 
       // 等待评论数据
       return await commentDataPromise
