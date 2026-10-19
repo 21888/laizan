@@ -5,14 +5,14 @@
     </div>
     <div v-else>
       <n-button v-if="!hasCommentConfig" text type="primary" @click="handleConfigureComment">
-        配置评论内容
+        AI 生成 · 配置参考
       </n-button>
       <div
         v-else
         class="cursor-pointer text-green-300 hover:text-green-200 flex items-center max-w-56"
         @click="handleConfigureComment"
       >
-        <span class="truncate underline">{{ commentText }}</span>
+        <span class="truncate underline">AI 生成 · {{ commentText }}</span>
         <span v-if="commentCount > 1" class="flex-shrink-0">(+{{ commentCount - 1 }})</span>
       </div>
     </div>

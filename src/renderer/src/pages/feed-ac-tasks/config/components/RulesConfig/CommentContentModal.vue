@@ -5,35 +5,22 @@
         <!-- 评论文案配置 -->
         <div>
           <div class="mb-3">
-            <h3 class="font-medium mb-1"><strong class="text-red-400 mr-1">*</strong>评论文案</h3>
-            <h3 class="text-xs text-gray-400">若配置多个文案则随机抽取一个评论</h3>
+            <h3 class="font-medium mb-1">评论参考文案（可选）</h3>
+            <h3 class="text-xs text-gray-400">
+              每条评论由文字生成模型根据视频生成，以下文案仅作风格参考
+            </h3>
           </div>
 
           <div
             v-if="commentTexts.length === 0"
             class="flex flex-col justify-center items-center my-2"
           >
-            <n-empty description="暂无评论文案">
+            <n-empty description="未填写时，模型会根据视频信息生成评论">
               <template #extra>
                 <div class="flex gap-2">
                   <n-button size="small" secondary type="primary" @click="addCommentText"
                     >添加文案</n-button
                   >
-                  <n-button
-                    size="small"
-                    tertiary
-                    style="
-                      border: 1px solid transparent;
-                      background-image:
-                        linear-gradient(rgb(5, 7, 19), rgb(5, 7, 19)),
-                        linear-gradient(to right, rgb(245, 65, 128), rgb(51, 142, 247));
-                      background-origin: border-box;
-                      background-clip: padding-box, border-box;
-                    "
-                    disabled
-                  >
-                    AI自动评论（敬请期待）
-                  </n-button>
                 </div>
               </template>
             </n-empty>
@@ -46,7 +33,7 @@
             >
               <n-input
                 v-model:value="commentTexts[index]"
-                placeholder="输入评论文案"
+                placeholder="输入参考文案"
                 size="medium"
               />
               <n-button size="medium" tertiary type="error" @click="removeCommentText(index)">

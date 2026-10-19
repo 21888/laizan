@@ -7,7 +7,20 @@
         <n-button type="primary" size="small" @click="onSave"> 保存 </n-button>
       </div>
     </div>
-    <n-card :bordered="true">
+    <n-card title="判断模型" :bordered="true">
+      <n-form label-width="auto">
+        <n-form-item label="模型"><n-input value="JEV（jev-latest）" readonly /></n-form-item>
+        <n-form-item label="API Key">
+          <n-input
+            v-model:value="aiSetting.jevApiKey"
+            type="password"
+            show-password-on="click"
+            placeholder="请输入 TypeSafe API Key"
+          />
+        </n-form-item>
+      </n-form>
+    </n-card>
+    <n-card title="文字生成模型" :bordered="true">
       <n-form label-width="auto">
         <n-form-item label="平台">
           <n-select
@@ -22,7 +35,9 @@
             v-model:value="aiSetting!.model"
             :options="modelOptionsForPlatform"
             :disabled="modelOptionsForPlatform.length === 0"
-            placeholder="选择模型"
+            :filterable="aiSetting.platform === 'openrouter'"
+            :tag="aiSetting.platform === 'openrouter'"
+            :placeholder="aiSetting.platform === 'openrouter' ? '选择或输入模型 ID' : '选择模型'"
           />
         </n-form-item>
         <n-form-item label="API Key">
@@ -51,6 +66,7 @@ const dialog = useDialog()
 const platformOptions: Array<{ label: string; value: AIPlatform; disabled?: boolean }> = [
   { label: '火山引擎', value: 'volcengine' },
   { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'OpenRouter', value: 'openrouter' },
   { label: '阿里百炼（暂未开放）', value: 'bailian', disabled: true },
   { label: 'OpenAI（暂未开放）', value: 'openai', disabled: true }
 ]
@@ -70,7 +86,11 @@ const onPlatformChange = (p: AIPlatform): void => {
 const onSave = async (): Promise<void> => {
   try {
     const options = PLATFORM_MODELS[aiSetting.value!.platform]
-    if (!options.includes(aiSetting.value!.model)) {
+    if (
+      aiSetting.value!.platform === 'openrouter'
+        ? !aiSetting.value!.model.trim()
+        : !options.includes(aiSetting.value!.model)
+    ) {
       message.error('所选模型与平台不匹配')
       return
     }

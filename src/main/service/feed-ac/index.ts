@@ -6,6 +6,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import DYElementHandler from '../../elements/douyin'
 import { AIServiceFactory } from '../../integration/ai/factory'
+import { JevService } from '../../integration/ai/jev'
 import { EventEmitter } from 'events'
 import { getFeedAcSettings } from './settings'
 import { FeedAcRuleGroups, FeedAcSettingsV2 } from '@/shared/feed-ac-setting'
@@ -97,7 +98,7 @@ export default class ACTask extends EventEmitter {
     })
     this._browser = browser
     this._page = await context.newPage()
-    this._page.goto('https://www.douyin.com/?recommend=1')
+    this._page.goto('https://www.douyin.com/?recommend=1&recommend=1&recommend=1&from_nav=1')
     this._dyElementHandler = new DYElementHandler(this._page)
   }
 
@@ -125,7 +126,10 @@ export default class ACTask extends EventEmitter {
       if (this._stopped) {
         throw new Error('Task stopped')
       }
-      this._log('info', `====== 开始处理第 ${i + 1} 个视频，已评论次数：${commentCount}/${maxCount} ======`)
+      this._log(
+        'info',
+        `====== 开始处理第 ${i + 1} 个视频，已评论次数：${commentCount}/${maxCount} ======`
+      )
 
       // 记录当前视频开始时间
       this._currentVideoStartTime = Date.now()
@@ -221,7 +225,7 @@ export default class ACTask extends EventEmitter {
 
         if (activityCheck.shouldComment) {
           this._log('info', '尝试发布评论')
-          const commnetResult = await this._postComment(videoAnalysis.matchedRuleGroup)
+          const commnetResult = await this._postComment(videoInfo, videoAnalysis.matchedRuleGroup)
           if (commnetResult.success) {
             commentCount++
             // 记录评论成功
@@ -437,10 +441,7 @@ export default class ACTask extends EventEmitter {
     if (ruleGroup.type === 'ai' && ruleGroup.aiPrompt) {
       try {
         const aiSettings = getAISettings()
-        const aiService = AIServiceFactory.createService(aiSettings.platform, {
-          apiKey: aiSettings.apiKeys[aiSettings.platform],
-          model: aiSettings.model
-        })
+        const aiService = new JevService(aiSettings.jevApiKey)
 
         const videoInfoStr = JSON.stringify({
           author: videoInfo.author.nickname,
@@ -569,12 +570,27 @@ export default class ACTask extends EventEmitter {
   }
 
   async _postComment(
+    videoInfo: FeedItem,
     matchedRuleGroup?: FeedAcRuleGroups
   ): Promise<{ success: boolean; commentText?: string; reason?: string }> {
     try {
-      // 从用户配置中获取随机评论内容
-      const randomComment = this._getRandomComment(matchedRuleGroup)
-      this._log('info', `随机选择评论内容: ${randomComment}`)
+      const aiSettings = getAISettings()
+      const apiKey = aiSettings.apiKeys[aiSettings.platform]
+      if (!apiKey.trim()) throw new Error('请先配置文字生成模型的 API Key')
+      const aiService = AIServiceFactory.createService(aiSettings.platform, {
+        apiKey,
+        model: aiSettings.model
+      })
+      this._log('info', '正在生成评论内容')
+      const randomComment = await aiService.generateComment(
+        JSON.stringify({
+          author: videoInfo.author.nickname,
+          videoDesc: videoInfo.desc,
+          videoTag: videoInfo.video_tag
+        }),
+        matchedRuleGroup?.commentTexts
+      )
+      this._log('info', `生成评论内容: ${randomComment}`)
 
       // 查找评论输入框容器
       const inputContainerSelector = '.comment-input-inner-container'
@@ -746,22 +762,6 @@ export default class ACTask extends EventEmitter {
       this._log('error', `发布评论时出错: ${error}`)
       return { success: false, reason: String(error) }
     }
-  }
-
-  // 随机选择评论内容
-  _getRandomComment(matchedRuleGroup?: FeedAcRuleGroups): string {
-    // 优先从匹配的规则组中获取评论内容
-    if (
-      matchedRuleGroup &&
-      matchedRuleGroup.commentTexts &&
-      matchedRuleGroup.commentTexts.length > 0
-    ) {
-      const randomIndex = Math.floor(Math.random() * matchedRuleGroup.commentTexts.length)
-      return matchedRuleGroup.commentTexts[randomIndex]
-    }
-
-    // 如果没有匹配的规则组或规则组没有配置评论内容，抛出错误
-    throw new Error('未配置评论文案，请在规则组中配置评论内容')
   }
 
   // 使用快捷键开启评论区并监听评论接口数据

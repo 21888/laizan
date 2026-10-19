@@ -5,24 +5,33 @@ export function getAISettings(): AISettings {
   const defaults = getDefaultAISetting()
   const platform = (saved?.platform as AIPlatform) || defaults.platform
   const candidates = PLATFORM_MODELS[platform]
-  const model = candidates.includes(saved?.model || '') ? (saved!.model as string) : defaults.model
+  const model =
+    platform === 'openrouter'
+      ? saved?.model?.trim() || candidates[0]
+      : candidates.includes(saved?.model || '')
+        ? (saved!.model as string)
+        : defaults.model
   const apiKeys = {
     ...defaults.apiKeys,
     ...(saved?.apiKeys || {})
   }
-  return { platform, model, apiKeys }
+  return { platform, model, apiKeys, jevApiKey: saved?.jevApiKey ?? defaults.jevApiKey }
 }
 
 export function updateAISettings(partial: Partial<AISettings>): AISettings {
   const current = getAISettings()
   const nextPlatform = (partial.platform as AIPlatform) || current.platform
   const candidates = PLATFORM_MODELS[nextPlatform]
-  const nextModel = partial.model ?? current.model
-  if (!candidates.includes(nextModel)) {
+  const nextModel =
+    nextPlatform === 'openrouter'
+      ? (partial.model ?? current.model).trim()
+      : (partial.model ?? current.model)
+  if (nextPlatform === 'openrouter' ? !nextModel : !candidates.includes(nextModel)) {
     throw new Error('所选模型与平台不匹配')
   }
 
   const next: AISettings = {
+    jevApiKey: partial.jevApiKey?.trim() ?? current.jevApiKey,
     platform: nextPlatform,
     model: nextModel,
     apiKeys: {
@@ -42,13 +51,15 @@ export function resetAiSettings(): AISettings {
 
 export function getDefaultAISetting(): AISettings {
   return {
+    jevApiKey: '',
     platform: 'volcengine',
     model: 'doubao-seed-1.6-250615',
     apiKeys: {
       volcengine: '',
       bailian: '',
       openai: '',
-      deepseek: ''
+      deepseek: '',
+      openrouter: ''
     }
   }
 }

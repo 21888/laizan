@@ -60,35 +60,6 @@ const validateForm = (): boolean => {
     return false
   }
 
-  // 递归检查所有最深层规则组是否配置了评论内容
-  const checkLeafRuleGroups = (groups: FeedAcRuleGroups[]): boolean => {
-    for (const group of groups) {
-      // 如果有子规则组，递归检查子规则组
-      if (group.children && group.children.length > 0) {
-        if (!checkLeafRuleGroups(group.children)) {
-          return false
-        }
-      } else {
-        // 最深层规则组，检查是否配置了评论内容
-        const hasCommentTexts =
-          group.commentTexts &&
-          group.commentTexts.length > 0 &&
-          group.commentTexts.some((text) => text.trim())
-        const hasCommentImage = group.commentImagePath && group.commentImagePath.trim()
-
-        if (!hasCommentTexts && !hasCommentImage) {
-          return false
-        }
-      }
-    }
-    return true
-  }
-
-  if (!checkLeafRuleGroups(settings.value!.ruleGroups)) {
-    message.error('还有未配置评论内容的规则组，请完善配置')
-    return false
-  }
-
   return true
 }
 
@@ -96,6 +67,18 @@ const handleStart = async (): Promise<void> => {
   try {
     // 表单验证
     if (!validateForm()) {
+      return
+    }
+
+    const aiSettings = await window.api.getAISettings()
+    if (!aiSettings.apiKeys[aiSettings.platform]?.trim() || !aiSettings.model.trim()) {
+      message.error('请先在全局设置中配置文字生成模型及 API Key')
+      return
+    }
+    const usesJev = (groups: FeedAcRuleGroups[]): boolean =>
+      groups.some((group) => group.type === 'ai' || usesJev(group.children || []))
+    if (usesJev(settings.value!.ruleGroups) && !aiSettings.jevApiKey.trim()) {
+      message.error('请先在全局设置中配置判断模型 JEV 的 API Key')
       return
     }
 

@@ -3,13 +3,15 @@ import { ArkService } from './ark'
 import { QwenService } from './qwen'
 import { DeepSeekService } from './deepseek'
 import { OpenAIService } from './openai'
+import { OpenRouterService } from './openrouter'
 import { AIPlatform } from '@/shared/ai-setting'
 
 const serviceMap: Record<AIPlatform, AIServiceConstructor> = {
   volcengine: ArkService,
   bailian: QwenService,
   openai: OpenAIService,
-  deepseek: DeepSeekService
+  deepseek: DeepSeekService,
+  openrouter: OpenRouterService
 }
 
 export class AIServiceFactory {

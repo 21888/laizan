@@ -10,10 +10,10 @@
           <n-radio :value="'manual'">手动配置规则</n-radio>
           <n-popover trigger="hover" :disabled="isAiConfigured">
             <template #trigger>
-              <n-radio :value="'ai'" :disabled="!isAiConfigured || loading">AI判断</n-radio>
+              <n-radio :value="'ai'" :disabled="!isAiConfigured || loading">JEV 判断</n-radio>
             </template>
             <div>
-              请前往<strong class="px-1 text-green-300">全局设置-模型设置</strong
+              请前往<strong class="px-1 text-green-300">全局设置-模型设置-判断模型</strong
               >，完成AI相关配置后启用
             </div>
           </n-popover>
